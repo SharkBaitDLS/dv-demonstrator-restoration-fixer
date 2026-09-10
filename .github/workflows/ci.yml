@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: [self-hosted, Windows]
+
+    env:
+      ReferencePath: 'C:\Program Files (x86)\Steam\steamapps\common\Derail Valley\DerailValley_Data\Managed\'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Verify manifests
+        shell: powershell
+        run: ./validate-manifests.ps1
+
+      - name: Restore
+        run: dotnet restore DRF.sln
+
+      - name: Lint
+        run: dotnet format DRF.sln --verify-no-changes --no-restore
+
+      - name: Debug Build
+        run: dotnet build DRF.sln -c Debug --no-restore
+
+      - name: Relesae Build
+        run: dotnet build DRF.sln -c Release --no-restore

@@ -1,0 +1,11 @@
+{
+	"Id": "DRF",
+	"Version": "1.0.0",
+	"DisplayName": "Demonstrator Restoration Fixer",
+	"Author": "SharkBaitDLS",
+	"EntryMethod": "DRF.Main.Load",
+	"ManagerVersion": "0.27.3",
+	"Requirements": [],
+	"LoadAfter": [],
+	"Repository": "https://raw.githubusercontent.com/SharkBaitDLS/dv-demonstrator-restoration-fixer/main/repository.json"
+}

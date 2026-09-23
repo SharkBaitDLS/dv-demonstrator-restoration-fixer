@@ -13,3 +13,9 @@ trim_trailing_whitespace = true
 
 [*.md]
 trim_trailing_whitespace = false
+
+[*.cs]
+# ?., ?? and ??= bypass Unity's null check, so a destroyed object reads as alive.
+dotnet_diagnostic.UNT0007.severity = warning
+dotnet_diagnostic.UNT0008.severity = warning
+dotnet_diagnostic.UNT0023.severity = warning

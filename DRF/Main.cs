@@ -1,6 +1,3 @@
-using System;
-using System.Reflection;
-using HarmonyLib;
 using UnityModManagerNet;
 
 namespace DRF;
@@ -11,23 +8,15 @@ public static class Main
 
     internal static UnityModManager.ModEntry.ModLogger Logger { get; private set; } = null!;
 
+    private static UnityModManager.ModEntry _entry = null!;
+
+    internal static void SaveSettings() => Settings.Save(_entry);
+
     private static bool Load(UnityModManager.ModEntry modEntry)
     {
+        _entry = modEntry;
         Logger = modEntry.Logger;
         Settings = UnityModManager.ModSettings.Load<Settings>(modEntry);
-
-        Harmony? harmony = null;
-        try
-        {
-            harmony = new Harmony(modEntry.Info.Id);
-            harmony.PatchAll(Assembly.GetExecutingAssembly());
-        }
-        catch (Exception ex)
-        {
-            modEntry.Logger.LogException($"Failed to load {modEntry.Info.DisplayName}:", ex);
-            harmony?.UnpatchAll(modEntry.Info.Id);
-            return false;
-        }
 
         modEntry.OnGUI = SettingsGUI.OnGUI;
         modEntry.OnSaveGUI = entry =>

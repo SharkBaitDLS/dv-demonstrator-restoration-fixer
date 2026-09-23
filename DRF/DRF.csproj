@@ -12,11 +12,71 @@
 		<Reference Include="Assembly-CSharp">
 			<HintPath>$(ReferencePath)Assembly-CSharp.dll</HintPath>
 		</Reference>
+		<Reference Include="DV.Common">
+			<HintPath>$(ReferencePath)DV.Common.dll</HintPath>
+		</Reference>
+		<Reference Include="DV.UserManagement">
+			<HintPath>$(ReferencePath)DV.UserManagement.dll</HintPath>
+		</Reference>
+		<Reference Include="DV.ThingTypes">
+			<HintPath>$(ReferencePath)DV.ThingTypes.dll</HintPath>
+		</Reference>
+		<Reference Include="DV.Utils">
+			<HintPath>$(ReferencePath)DV.Utils.dll</HintPath>
+		</Reference>
+		<Reference Include="DV.RailTrack">
+			<HintPath>$(ReferencePath)DV.RailTrack.dll</HintPath>
+		</Reference>
+		<Reference Include="DV.BrakeSystem">
+			<HintPath>$(ReferencePath)DV.BrakeSystem.dll</HintPath>
+		</Reference>
+		<Reference Include="DV.PointSet">
+			<HintPath>$(ReferencePath)DV.PointSet.dll</HintPath>
+		</Reference>
+		<Reference Include="DV.OriginShiftInfo">
+			<HintPath>$(ReferencePath)DV.OriginShiftInfo.dll</HintPath>
+		</Reference>
+		<Reference Include="net.smkd.vector3d">
+			<HintPath>$(ReferencePath)net.smkd.vector3d.dll</HintPath>
+		</Reference>
+		<Reference Include="BezierCurves">
+			<HintPath>$(ReferencePath)BezierCurves.dll</HintPath>
+		</Reference>
+		<Reference Include="WorldStreamer">
+			<HintPath>$(ReferencePath)WorldStreamer.dll</HintPath>
+		</Reference>
+		<Reference Include="Newtonsoft.Json">
+			<HintPath>$(ReferencePath)Newtonsoft.Json.dll</HintPath>
+		</Reference>
+	</ItemGroup>
+
+	<!-- Unity -->
+	<ItemGroup>
+		<Reference Include="UnityEngine">
+			<HintPath>$(ReferencePath)UnityEngine.dll</HintPath>
+		</Reference>
+		<Reference Include="UnityEngine.CoreModule">
+			<HintPath>$(ReferencePath)UnityEngine.CoreModule.dll</HintPath>
+		</Reference>
+		<Reference Include="UnityEngine.IMGUIModule">
+			<HintPath>$(ReferencePath)UnityEngine.IMGUIModule.dll</HintPath>
+		</Reference>
+		<Reference Include="UnityEngine.TextRenderingModule">
+			<HintPath>$(ReferencePath)UnityEngine.TextRenderingModule.dll</HintPath>
+		</Reference>
+		<Reference Include="UnityEngine.PhysicsModule">
+			<HintPath>$(ReferencePath)UnityEngine.PhysicsModule.dll</HintPath>
+		</Reference>
 	</ItemGroup>
 
 	<!-- Mod Loader -->
 	<ItemGroup>
 		<PackageReference Include="UnityModManager" Version="0.27.2"/>
+	</ItemGroup>
+
+	<!-- Unity Analyzers: Unity-aware null checks and other Unity-specific diagnostics -->
+	<ItemGroup>
+		<PackageReference Include="Microsoft.Unity.Analyzers" Version="1.27.0" PrivateAssets="all"/>
 	</ItemGroup>
 
 	<!-- Null Checking -->

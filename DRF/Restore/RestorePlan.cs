@@ -46,7 +46,7 @@ internal sealed class RestoreRow(string saveId, DemonstratorRecord? current, Dem
             if (!CanRestore) return "the selected save no longer holds its cars";
             if (SourceState > StateNow) return "further along in the selected save";
             if (!HasCarsNow) return "its locomotive is missing here";
-            if (SourceState < StateNow) return "it is currently further progressed, this would revert it"; 
+            if (SourceState < StateNow) return "it is currently further progressed, this would revert it";
             return "no difference";
         }
     }

@@ -195,7 +195,7 @@ internal static class LiveRestore
     {
         if (!source.HasCustomDemonstratorData)
         {
-            outcome.Note("The selected save has no Custom Demonstrators data, so this save keeps its own.");
+            outcome.Note("The selected save has no Custom Demonstrators data, skipping integration.");
             return;
         }
 
@@ -206,37 +206,32 @@ internal static class LiveRestore
             return;
         }
 
+        // Written first, since Custom Demonstrators reconciles its parts cargo numbers from it
         var cargo = CargoTable.Build(source);
-
-        var merged = CustomDemonstratorsBridge.MergeDemonstrators(source.Root, saveIds, asNewSlots);
-        if (merged == CustomDemonstratorsBridge.Result.Unavailable)
-            CopyWholeRecord(source, saveIds, live, outcome);
-        else if (asNewSlots.Count > 0)
-            outcome.Note($"{asNewSlots.Count} demonstrator(s) were given a slot of their own, in the museum "
-                + "instead of replacing an existing demonstrator in their former slot.");
-
         cargo.Write(live);
         foreach (var note in cargo.Notes) outcome.Note(note);
 
         outcome.CustomDemonstratorsRestored = true;
 
-        switch (merged == CustomDemonstratorsBridge.Result.Unavailable
-            ? merged
-            : CustomDemonstratorsBridge.Reload())
+        switch (CustomDemonstratorsBridge.RestoreDemonstrators(source.Root, saveIds, asNewSlots))
         {
             case CustomDemonstratorsBridge.Result.Done:
-                outcome.Note("Custom Demonstrators has taken the restored demonstrators into its record and "
-                    + "read it back, so its slots match this save again.");
+                outcome.Note("Custom Demonstrators has put the restored demonstrators back into its slots.");
+                if (asNewSlots.Count > 0)
+                {
+                    outcome.Note($"{asNewSlots.Count} demonstrator(s) were given a slot of their own in the "
+                        + "museum instead of replacing an existing demonstrator in their former slot.");
+                }
                 break;
             case CustomDemonstratorsBridge.Result.Failed:
-                outcome.Warn("Custom Demonstrators could not accept the restored record. This may cause it to "
-                    + " not recognize the demonstrators you restored on next save load.");
+                outcome.Warn("Custom Demonstrators could not put the restored demonstrators back into its slots.");
                 break;
             default:
-                outcome.Note("Custom Demonstrators isn't here to rebuild its record, or is out of date, "
-                    + $"so all {source.CustomDemonstratorKeys.Count} of the selected save's key(s) "
-                    + "travel with this save as they are, to be read whenever it is next loaded with that "
-                    + "mod installed.");
+                CopyWholeRecord(source, saveIds, live, outcome);
+                cargo.Write(live);
+                outcome.Note("Custom Demonstrators isn't installed or is out of date, so all "
+                    + $"{source.CustomDemonstratorKeys.Count} of the selected save's key(s) "
+                    + "travel with this save as they are.");
                 break;
         }
     }

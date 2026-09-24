@@ -6,10 +6,6 @@ using UnityModManagerNet;
 
 namespace DRF.Restore;
 
-// Custom Demonstrators reads its own record out of a save while that save is being loaded, so a record
-// written into the loaded save afterwards would sit there unread until the next load.
-// This helper uses CD's API to merge the demonstrators being restored over into the save record,
-// then tells CD to read it again.
 internal static class CustomDemonstratorsBridge
 {
     private const string ModId = "CustomDemonstrators";
@@ -22,19 +18,11 @@ internal static class CustomDemonstratorsBridge
         Failed,
     }
 
-    internal static Result MergeDemonstrators(JObject source, ICollection<string> saveIds,
-        ICollection<string> asNewSlots)
-    {
-        if (asNewSlots.Count > 0)
-        {
-            return Invoke("MergeDemonstratorsFrom",
-                [typeof(JObject), typeof(IEnumerable<string>), typeof(IEnumerable<string>)],
-                [source, saveIds, asNewSlots]);
-        }
-
-        return Invoke("MergeDemonstratorsFrom",
-            [typeof(JObject), typeof(IEnumerable<string>)], [source, saveIds]);
-    }
+    internal static Result RestoreDemonstrators(JObject source, ICollection<string> saveIds,
+        ICollection<string> asNewSlots) =>
+        Invoke("RestoreDemonstratorsFrom",
+            [typeof(JObject), typeof(IEnumerable<string>), typeof(IEnumerable<string>)],
+            [source, saveIds, asNewSlots]);
 
     internal static IDictionary<string, string?> NewSlotReasons(JObject source, IEnumerable<string> saveIds) =>
         Ask<string?>("NewSlotEligibility", source, saveIds);
@@ -66,8 +54,6 @@ internal static class CustomDemonstratorsBridge
         return empty;
     }
 
-    internal static Result Reload() => Invoke("Reload", Type.EmptyTypes, []);
-
     private static Result Invoke(string name, Type[] signature, object[] arguments)
     {
         var mod = UnityModManager.FindMod(ModId);
@@ -77,8 +63,8 @@ internal static class CustomDemonstratorsBridge
             ?.GetMethod(name, BindingFlags.Public | BindingFlags.Static, null, signature, null);
         if (method == null)
         {
-            Main.Logger.Log($"{ModId} {mod.Info?.Version} has no {TypeName}.{name}(), so the restored record "
-                + "waits for the next load.");
+            Main.Logger.Log($"{ModId} {mod.Info?.Version} has no {TypeName}.{name}(), so its record is "
+                + "copied over whole instead.");
             return Result.Unavailable;
         }
 
@@ -86,8 +72,7 @@ internal static class CustomDemonstratorsBridge
         {
             if (method.Invoke(null, arguments) is true) return Result.Done;
 
-            Main.Logger.Warning($"{TypeName}.{name}() declined; that mod's own log says why. The record is "
-                + "written either way and is read on the next load.");
+            Main.Logger.Warning($"{TypeName}.{name}() did not accept the update.");
             return Result.Failed;
         }
         catch (Exception ex)

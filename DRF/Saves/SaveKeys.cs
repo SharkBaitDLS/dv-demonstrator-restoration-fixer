@@ -18,6 +18,8 @@ internal static class SaveKeys
     internal const string StorageLostAndFound = "Storage_LostAndFound";
     internal const string StorageWorld = "Storage_World";
 
+    internal const string Turntables = "Turntables";
+
     internal const string CustomDemonstratorsPrefix = "CustomDemonstrators_";
 
     internal const string CustomDemonstratorsCargoIds = CustomDemonstratorsPrefix + "CargoIds";
@@ -66,6 +68,9 @@ internal static class SaveKeys
     internal const string AirHoseRear = "airHoseR";
     internal const string AirCockFront = "airCockF";
     internal const string AirCockRear = "airCockR";
+
+    // Inside one entry of Turntables, keyed by the turntable's unique ID
+    internal const string TurntableRotation = "rot";
 
     // Inside one entry of Restoration_Locos
     internal const string RestorationState = "state";

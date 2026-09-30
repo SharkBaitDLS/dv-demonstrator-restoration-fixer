@@ -47,7 +47,8 @@ internal static class LiveRestore
                 Attempt(saveId, outcome, () => Prepare(source, saveId, pending, outcome));
 
             var ready = pending.Where(p => p.Ready).ToList();
-            var batch = new CarInjector.Batch(source.TracksHash, ready.SelectMany(p => Records(source, p.Wanted)));
+            var batch = new CarInjector.Batch(source.TracksHash, source.Root[SaveKeys.Turntables] as JObject,
+                ready.SelectMany(p => Records(source, p.Wanted)));
             try
             {
                 CarInjector.Spawn(batch, outcome);

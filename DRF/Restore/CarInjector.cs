@@ -33,6 +33,9 @@ internal static class CarInjector
     // How far along a track a train is slid, each step, looking for room near where it stood.
     private const double SpanStep = 1.0;
 
+    // Below the game's own turntable step, so a turntable left where it was counts as not having turned.
+    private const float TurntableTolerance = 0.01f;
+
     private const double TrackEndClearance = 2.5;
     private const double JunctionClearance = 15.0;
 
@@ -71,13 +74,17 @@ internal static class CarInjector
     // were coupled together in the prior save data, they should be restored as the same consist.
     internal sealed class Batch
     {
-        internal Batch(string? sourceTracksHash, IEnumerable<CarRecord> records)
+        internal Batch(string? sourceTracksHash, JObject? sourceTurntables, IEnumerable<CarRecord> records)
         {
             SourceTracksHash = sourceTracksHash;
+            SourceTurntables = sourceTurntables;
             Records = [.. records.GroupBy(r => r.Guid, StringComparer.Ordinal).Select(g => g.First())];
         }
 
         internal string? SourceTracksHash { get; }
+
+        // How each turntable stood in the source save, by its unique ID.
+        internal JObject? SourceTurntables { get; }
 
         internal List<CarRecord> Records { get; }
 
@@ -90,6 +97,20 @@ internal static class CarInjector
         // The ends of moved cars that were set down coupled to the car they stood coupled to, as (GUID,
         // front end). Only these ends of a moved car keep their couplings.
         internal HashSet<(string Guid, bool Front)> JoinedEnds { get; } = [];
+    }
+
+    private sealed class Spot(RailTrack track1, double span1, RailTrack track2, double span2, Vector3 position,
+        Quaternion rotation, float turned)
+    {
+        internal RailTrack Track1 { get; } = track1;
+        internal double Span1 { get; } = span1;
+        internal RailTrack Track2 { get; } = track2;
+        internal double Span2 { get; } = span2;
+        internal Vector3 Position { get; } = position;
+        internal Quaternion Rotation { get; } = rotation;
+
+        // How far the turntable it stands on has turned since the save, in degrees.
+        internal float Turned { get; } = turned;
     }
 
     // A car to be put back, with what is needed to place it.
@@ -156,12 +177,16 @@ internal static class CarInjector
                 continue;
             }
 
-            if (record.Derailed || TryResolveTracks(record, batch.SourceTracksHash, out _, out _, out _, out _))
+            var spot = record.Derailed ? null : InPlace(record, batch, outcome);
+            if (record.Derailed || spot != null)
             {
                 Guarded(record, outcome, () =>
                 {
-                    Placed(batch, record, SpawnInPlace(prefab, record, batch.SourceTracksHash), false, outcome);
-                    outcome.Note($"Put {record.Id} back exactly where it stood.");
+                    Placed(batch, record, SpawnInPlace(prefab, record, spot), false, outcome);
+                    outcome.Note(spot is { Turned: not 0f }
+                        ? $"Put {record.Id} back where it stood on its turntable, turned with the turntable by "
+                            + $"the {Mathf.Abs(spot.Turned):0}° it has turned since."
+                        : $"Put {record.Id} back exactly where it stood.");
                 });
                 continue;
             }
@@ -259,24 +284,79 @@ internal static class CarInjector
         outcome.CarsReturned++;
     }
 
-    private static TrainCar SpawnInPlace(GameObject prefab, CarRecord record, string? sourceTracksHash)
+    private static TrainCar SpawnInPlace(GameObject prefab, CarRecord record, Spot? spot)
     {
         var spawner = SingletonBehaviour<CarSpawner>.Instance;
-        var position = record.Position + WorldMover.currentMove;
 
         // A derailed car was never on a track to begin with, so its own position is reasonably as good
         // after a track update as it was before.
-        if (record.Derailed)
+        if (spot == null)
         {
             return spawner.SpawnLoadedCar(prefab, record.Id, record.Guid, PlayerSpawned(record),
-                Unique(record), position, Rotation(record),
+                Unique(record), record.Position + WorldMover.currentMove, Rotation(record),
                 bogie1Derailed: true, null, 0.0, bogie2Derailed: true, null, 0.0);
         }
 
-        TryResolveTracks(record, sourceTracksHash, out var track1, out var span1, out var track2, out var span2);
         return spawner.SpawnLoadedCar(prefab, record.Id, record.Guid, PlayerSpawned(record),
-            Unique(record), position, Rotation(record),
-            bogie1Derailed: false, track1, span1, bogie2Derailed: false, track2, span2);
+            Unique(record), spot.Position + WorldMover.currentMove, spot.Rotation,
+            bogie1Derailed: false, spot.Track1, spot.Span1, bogie2Derailed: false, spot.Track2, spot.Span2);
+    }
+
+    // The car's own tracks and pose, if it can go straight back onto them. A turntable's deck is a track the
+    // game turns in place, so a car saved on one goes back to the same spot on the deck, turned by however far
+    // the deck has turned since. A car with its bogies either side of a table that has since turned can't stand
+    // where it was, so it is moved like one on a railway that changed.
+    private static Spot? InPlace(CarRecord record, Batch batch, RestoreOutcome outcome)
+    {
+        if (!TryResolveTracks(record, batch.SourceTracksHash, out var track1, out var span1, out var track2,
+                out var span2))
+        {
+            return null;
+        }
+
+        var position = record.Position;
+        var rotation = Rotation(record);
+        var deck1 = track1!.GetComponent<TurntableRailTrack>();
+        var deck2 = track2!.GetComponent<TurntableRailTrack>();
+        if (deck1 == null && deck2 == null) return new Spot(track1, span1, track2, span2, position, rotation, 0f);
+
+        var turned1 = deck1 != null ? Turned(deck1, batch) : 0f;
+        var turned2 = deck2 != null ? Turned(deck2, batch) : 0f;
+        if (turned1 == null || turned2 == null)
+        {
+            outcome.Note($"The selected save doesn't say which way the turntable under {record.Id} was facing, "
+                + "so it goes back on the nearest track with room for it instead.");
+            return null;
+        }
+
+        if (deck1 != deck2)
+        {
+            if (turned1 == 0f && turned2 == 0f) return new Spot(track1, span1, track2, span2, position, rotation, 0f);
+
+            outcome.Note($"{record.Id} stood half on a turntable that has turned since, so it goes back on the "
+                + "nearest track with room for it instead.");
+            return null;
+        }
+
+        var turned = turned1.Value;
+        if (turned == 0f) return new Spot(track1, span1, track2, span2, position, rotation, 0f);
+
+        var pivot = deck1!.transform.position - WorldMover.currentMove;
+        var turn = Quaternion.Euler(0f, turned, 0f);
+        Main.Logger.Log($"{record.Id} stood on turntable {deck1.uniqueID}, which has turned {turned:0.##} degrees "
+            + "since the selected save, so it goes back turned with it.");
+        return new Spot(track1, span1, track2, span2, pivot + turn * (position - pivot), turn * rotation, turned);
+    }
+
+    // How far a turntable has turned since the source save, the shortest way round, or null if the save
+    // doesn't record it.
+    private static float? Turned(TurntableRailTrack deck, Batch batch)
+    {
+        var saved = (batch.SourceTurntables?[deck.uniqueID] as JObject)?.GetFloat(SaveKeys.TurntableRotation);
+        if (!saved.HasValue) return null;
+
+        var turned = Mathf.DeltaAngle(saved.Value, deck.currentYRotation);
+        return Mathf.Abs(turned) < TurntableTolerance ? 0f : turned;
     }
 
     // The cars being moved, gathered into the trains they stood coupled in. Each train is in order from one

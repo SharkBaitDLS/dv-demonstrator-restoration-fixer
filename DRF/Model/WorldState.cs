@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using DRF.World;
 using DV.Customization.Gadgets;
 using DV.Customization.Paint;
 using DV.LocoRestoration;
@@ -37,19 +38,28 @@ internal static class WorldState
     internal static bool IsInGame =>
         LocoRestorationController.allLocoRestorationControllers.Any(c => c != null);
 
+    internal static TrainCar? Loco(LocoRestorationController controller) => LocoField.Value?.Invoke(controller);
+
+    internal static TrainCar? SecondCar(LocoRestorationController controller) =>
+        SecondCarField.Value?.Invoke(controller);
+
+    // Some mods can unlock a demonstrator's garage before its quest has earned it.
+    internal static bool GarageUnlockedEarly(LocoRestorationController controller) =>
+        controller.State < LocoRestorationController.RestorationState.S9_LocoServiced
+        && controller.garageSpawner != null
+        && GarageState.IsUnlocked(controller.garageSpawner.garageType);
+
     internal static IReadOnlyDictionary<string, Demonstrator> Read()
     {
         var result = new Dictionary<string, Demonstrator>(StringComparer.Ordinal);
-        var locoField = LocoField.Value;
-        var secondCarField = SecondCarField.Value;
 
         foreach (var controller in LocoRestorationController.allLocoRestorationControllers)
         {
             if (controller == null) continue;
 
-            var loco = locoField?.Invoke(controller);
-            var secondCar = secondCarField?.Invoke(controller);
-            var hasLoco = locoField == null || loco != null;
+            var loco = Loco(controller);
+            var secondCar = SecondCar(controller);
+            var hasLoco = LocoField.Value == null || loco != null;
 
             result[controller.SaveID] = new Demonstrator(
                 (int)controller.State,

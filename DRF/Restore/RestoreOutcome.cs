@@ -24,6 +24,8 @@ internal sealed class RestoreOutcome
 
     internal bool Failed { get; set; }
 
+    internal bool ByHand { get; set; }
+
     internal void Note(string note)
     {
         Notes.Add(note);
@@ -40,7 +42,9 @@ internal sealed class RestoreOutcome
     {
         var lines = new List<string>
         {
-            $"Restored {Demonstrators} demonstrator{(Demonstrators == 1 ? "" : "s")}.",
+            ByHand
+                ? $"Moved {Demonstrators} demonstrator{(Demonstrators == 1 ? "" : "s")} forward."
+                : $"Restored {Demonstrators} demonstrator{(Demonstrators == 1 ? "" : "s")}.",
         };
         if (CarsReturned > 0) lines.Add($"Put {CarsReturned} car(s) back into the world.");
         if (CarsRemoved > 0) lines.Add($"Removed {CarsRemoved} unwanted car(s).");
@@ -49,6 +53,7 @@ internal sealed class RestoreOutcome
         if (ItemsReattached > 0) lines.Add($"Reattached {ItemsReattached} item(s) from lost and found.");
         if (ItemsUnaccounted > 0) lines.Add($"{ItemsUnaccounted} item(s) had nothing in lost and found to claim.");
         if (CustomDemonstratorsRestored) lines.Add("Restored the Custom Demonstrators save record.");
+        if (ByHand && Demonstrators == 0 && !Failed) lines.RemoveAt(0);
         return string.Join("\n", lines);
     }
 }

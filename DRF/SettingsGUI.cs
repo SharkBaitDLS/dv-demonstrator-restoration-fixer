@@ -21,7 +21,11 @@ internal static class SettingsGUI
         Pick a save from before that happened and DRF will bring them back to the present exactly as they were (or on a nearby track if the exact spot can't be used).
 
         Optionally, if you are using Custom Demonstrators and wish to bring a custom demonstrator forward without overridding a different one that has been restored in its slot, DRF can assign the recovered demonstrator to a new slot in the museum if one is available.
+
+        No save from before it happened? A demonstrator whose cars are still in the world can instead be moved forward through its quest by hand, as far as where its cars are allows.
         """;
+
+    private static readonly string[] Modes = ["Restore from a save", "Move a quest forward by hand"];
 
     private const float ButtonWidth = 420f;
     private const float FieldLabelWidth = 220f;
@@ -43,8 +47,10 @@ internal static class SettingsGUI
 
     private static string _searchRangeText = "";
 
+    private static bool _byHand;
+
     private static RestoreOutcome? _lastOutcome;
-    private static string _lastOutcomeLabel = "";
+    private static string _lastOutcomeHeading = "";
 
     internal static void ForgetCachedSurveys()
     {
@@ -85,6 +91,14 @@ internal static class SettingsGUI
         DrawWorldNotice();
 
         GUILayout.Space(8);
+        _byHand = GUILayout.Toolbar(_byHand ? 1 : 0, Modes, GUILayout.Width(ButtonWidth * 1.5f)) == 1;
+        GUILayout.Space(6);
+        if (_byHand)
+        {
+            DrawAdvance();
+            return;
+        }
+
         GUILayout.Label("Restore from", Bold);
         var picked = SaveListView.Draw(_selectedKey);
         if (picked != _selectedKey)
@@ -122,13 +136,20 @@ internal static class SettingsGUI
         var world = WorldState.Read();
         var lost = world.Values.Count(d => !d.HasLoco);
         var reset = world.Count(d => d.Value.State == 0 && WasFurtherAlong(d.Key));
-        if (lost == 0 && reset == 0) return;
+        var earlyGarages = DV.LocoRestoration.LocoRestorationController.allLocoRestorationControllers
+            .Count(c => c != null && WorldState.GarageUnlockedEarly(c));
+        if (lost == 0 && reset == 0 && earlyGarages == 0) return;
 
         GUILayout.BeginVertical(GUI.skin.box);
         if (lost > 0)
             GUILayout.Label($"{lost} demonstrator(s) in were not recovered successfully.");
         if (reset > 0)
             GUILayout.Label($"{reset} demonstrator(s) have been reset to a fresh wreck.");
+        if (earlyGarages > 0)
+        {
+            GUILayout.Label($"{earlyGarages} demonstrator(s) have their garage unlocked before being repaired. "
+                + $"It can be revoked under \"{Modes[1]}\".", GUILayout.ExpandWidth(true));
+        }
         GUILayout.EndVertical();
         GUILayout.Space(6);
     }
@@ -141,10 +162,11 @@ internal static class SettingsGUI
         if (_lastOutcome == null) return;
 
         GUILayout.BeginVertical(GUI.skin.box);
-        GUILayout.Label($"Last restore, from {_lastOutcomeLabel}:", Bold);
+        GUILayout.Label(_lastOutcomeHeading, Bold);
         GUILayout.Label(_lastOutcome.Summary());
         foreach (var note in _lastOutcome.Notes) GUILayout.Label("• " + note, GUILayout.ExpandWidth(true));
-        GUILayout.Label("If this isn't what you wanted, quit to the menu without saving or reload an earlier save.");
+        GUILayout.Label("If this isn't what you wanted, quit to the menu without saving or reload an earlier save.",
+            GUILayout.ExpandWidth(true));
         if (GUILayout.Button("Dismiss", GUILayout.Width(120))) _lastOutcome = null;
         GUILayout.EndVertical();
         GUILayout.Space(6);
@@ -189,8 +211,9 @@ internal static class SettingsGUI
 
     private static void Restore(RestorationSurvey source)
     {
-        _lastOutcomeLabel = SaveCatalog.Find(_selectedKey)?.Describe() ?? "an earlier save";
-        Main.Logger.Log($"Restoring {string.Join(", ", Chosen)} from {_lastOutcomeLabel}.");
+        var label = SaveCatalog.Find(_selectedKey)?.Describe() ?? "an earlier save";
+        _lastOutcomeHeading = $"Last restore, from {label}:";
+        Main.Logger.Log($"Restoring {string.Join(", ", Chosen)} from {label}.");
 
         _lastOutcome = LiveRestore.Apply(source, [.. Chosen], [.. AsNewSlots]);
         Main.SaveSettings();
@@ -198,6 +221,29 @@ internal static class SettingsGUI
         // The world has moved on from what the comparison above was built from.
         _currentSurvey = null;
         _chosenFor = null;
+    }
+
+    private static void DrawAdvance()
+    {
+        if (!WorldState.IsInGame)
+        {
+            GUILayout.Label("Load a save to move a quest forward.");
+            return;
+        }
+
+        if (AdvanceView.Draw() is not { } request) return;
+
+        if (request.State is not { } state)
+        {
+            _lastOutcomeHeading = $"Last change, {request.SaveId}'s garage revoked by hand:";
+            Main.Logger.Log($"Revoking the garage of {request.SaveId} by hand.");
+            _lastOutcome = ManualAdvance.RevokeGarage(request.SaveId);
+            return;
+        }
+
+        _lastOutcomeHeading = $"Last change, {request.SaveId} moved forward by hand:";
+        Main.Logger.Log($"Moving {request.SaveId} forward to {RestorationStates.Describe(state)} by hand.");
+        _lastOutcome = ManualAdvance.Apply(request.SaveId, state);
     }
 
     private static SaveGameData? _surveyedSave;

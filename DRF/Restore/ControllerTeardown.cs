@@ -24,6 +24,36 @@ internal static class ControllerTeardown
 
         // Unsubscribe from the cars before they are deleted, because deleting a demonstrator's locomotive
         // is exactly what OnUnexpectedDestroy watches to spawn a new wreck.
+        Unhook(controller, view, loco, secondCar, outcome);
+        foreach (var car in new[] { loco, secondCar })
+        {
+            if (car == null) continue;
+            StopGarageWatchingCar(controller, car);
+        }
+
+        DeleteCars(controller, outcome, secondCar, loco);
+
+        view.Field("loco").SetValue(null);
+        view.Field("secondCar").SetValue(null);
+
+        GarageState.ClearCars(controller.garageSpawner);
+        GarageState.StopSpawning(controller.garageSpawner);
+
+        FreeSpawnAnchors(controller);
+    }
+
+    // Stops the controller reacting to anything while leaving its cars in the world and the garage as it is,
+    // ready for LoadData to pick the same cars back up at another state.
+    internal static void Release(LocoRestorationController controller, RestoreOutcome outcome)
+    {
+        var view = Traverse.Create(controller);
+        Unhook(controller, view, view.Field("loco").GetValue<TrainCar>(),
+            view.Field("secondCar").GetValue<TrainCar>(), outcome);
+    }
+
+    private static void Unhook(LocoRestorationController controller, Traverse view, TrainCar? loco,
+        TrainCar? secondCar, RestoreOutcome outcome)
+    {
         controller.StopAllCoroutines();
         StopWatchingPaint(controller, loco);
         StopWatchingLicenses(controller, loco, secondCar);
@@ -37,18 +67,9 @@ internal static class ControllerTeardown
             StopWatchingCar(controller, car);
         }
 
-        DeleteCars(controller, outcome, secondCar, loco);
-
-        view.Field("loco").SetValue(null);
-        view.Field("secondCar").SetValue(null);
         view.Field("transportingCars").SetValue(null);
         view.Field("locoPartDelivery").SetValue(null);
         view.Field("unexpectedDestroyHandlingCoro").SetValue(null);
-
-        GarageState.ClearCars(controller.garageSpawner);
-        GarageState.StopSpawning(controller.garageSpawner);
-
-        FreeSpawnAnchors(controller);
     }
 
     private static void StopWatchingPaint(LocoRestorationController controller, TrainCar? loco)
@@ -143,7 +164,10 @@ internal static class ControllerTeardown
 
         if (car.TryGetComponent<SimulatedCarPitStopParameters>(out var pitStop))
             pitStop.ParametersUpdated -= CarLifecycle.DelegateFor<Action>(controller, "OnServiceDone");
+    }
 
+    private static void StopGarageWatchingCar(LocoRestorationController controller, TrainCar car)
+    {
         var garage = controller.garageSpawner;
         if (garage != null)
             car.OnDestroyCar -= CarLifecycle.DelegateFor<Action<TrainCar>>(garage, "OnGarageCarDeleted");

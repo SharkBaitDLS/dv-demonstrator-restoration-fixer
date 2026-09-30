@@ -171,7 +171,7 @@ internal static class LiveRestore
         return OnOrder;
     }
 
-    private static void ReconcileGarage(LocoRestorationController controller,
+    internal static void ReconcileGarage(LocoRestorationController controller,
         IReadOnlyDictionary<string, TrainCar> cars, RestoreOutcome outcome)
     {
         var garage = controller.garageSpawner;

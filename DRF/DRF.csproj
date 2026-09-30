@@ -30,6 +30,9 @@
 		<Reference Include="DV.BrakeSystem">
 			<HintPath>$(ReferencePath)DV.BrakeSystem.dll</HintPath>
 		</Reference>
+		<Reference Include="DV.Simulation">
+			<HintPath>$(ReferencePath)DV.Simulation.dll</HintPath>
+		</Reference>
 		<Reference Include="DV.PointSet">
 			<HintPath>$(ReferencePath)DV.PointSet.dll</HintPath>
 		</Reference>

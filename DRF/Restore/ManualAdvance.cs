@@ -1,15 +1,10 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using DRF.Model;
-using DRF.Saves;
 using DRF.World;
-using DV.JObjectExtstensions;
 using DV.LocoRestoration;
 using DV.ThingTypes;
 using HarmonyLib;
-using Newtonsoft.Json.Linq;
-using UnityEngine;
 
 namespace DRF.Restore;
 
@@ -19,9 +14,6 @@ internal static class ManualAdvance
     private const int Rerailed = (int)LocoRestorationController.RestorationState.S3_RerailedCars;
     private const int PartInstalled = (int)LocoRestorationController.RestorationState.S8_PartInstalled;
     private const int Serviced = (int)LocoRestorationController.RestorationState.S9_LocoServiced;
-
-    private static readonly System.Reflection.FieldInfo? LoadingDoneField =
-        AccessTools.Field(typeof(LocoRestorationController), "loadingDone");
 
     internal static RestoreOutcome Apply(string saveId, int wanted)
     {
@@ -51,24 +43,20 @@ internal static class ManualAdvance
         }
 
         // Quest popups for every step it skips past would only be noise.
-        var loadingDone = LoadingDoneField?.GetValue(controller);
-        LoadingDoneField?.SetValue(controller, false);
-        try
+        using (QuestPopups.Hold(controller))
         {
-            if (wanted < Rerailed) Unblock(condition, wanted);
-            else Reload(condition, wanted, outcome);
-        }
-        catch (Exception ex)
-        {
-            Main.Logger.LogException($"Moving '{saveId}' forward failed:", ex);
-            outcome.Warn($"Moving '{saveId}' forward failed partway through. See the log; this demonstrator "
-                + "may need the save reloaded to settle.");
-            outcome.Failed = true;
-            return outcome;
-        }
-        finally
-        {
-            LoadingDoneField?.SetValue(controller, loadingDone ?? true);
+            try
+            {
+                if (wanted < Rerailed) Unblock(condition, wanted);
+                else Reload(condition, wanted, outcome);
+            }
+            catch (Exception ex)
+            {
+                Main.Logger.LogException($"Moving '{saveId}' forward failed:", ex);
+                outcome.Warn($"Moving '{saveId}' forward failed partway through.");
+                outcome.Failed = true;
+                return outcome;
+            }
         }
 
         outcome.Demonstrators++;
@@ -131,16 +119,6 @@ internal static class ManualAdvance
 
     private static void Reload(DemonstratorCondition condition, int wanted, RestoreOutcome outcome)
     {
-        var controller = condition.Controller;
-        var entry = Traverse.Create(controller).Field("saveData").GetValue<JObject>()?.DeepClone() as JObject
-            ?? [];
-        entry.SetInt(SaveKeys.RestorationState, wanted);
-        entry.SetString(SaveKeys.RestorationLoco, condition.Loco.CarGUID);
-        if (condition.SecondCar != null) entry.SetString(SaveKeys.RestorationSecondCar, condition.SecondCar.CarGUID);
-        entry.Remove(SaveKeys.RestorationTransportingCars);
-
-        ControllerTeardown.Release(controller, outcome);
-
         // Paying for the part installation is what brings a steam loco's boiler back into working order.
         var sim = condition.Loco.SimController;
         if (condition.State < PartInstalled && wanted >= PartInstalled
@@ -149,15 +127,7 @@ internal static class ManualAdvance
             sim.portsOverrider.BoilerSpecialRequest(2f);
         }
 
-        var lent = LendBlockers(condition.Cars);
-        try
-        {
-            controller.LoadData(entry);
-        }
-        finally
-        {
-            ReturnBlockers(lent);
-        }
+        ControllerReload.At(condition, wanted, outcome);
 
         // LoadData expects serviced cars to come out of a save already free of the restoration's limits, as
         // they would be once the service check has passed, but these are still held down from earlier states.
@@ -166,25 +136,8 @@ internal static class ManualAdvance
             foreach (var car in condition.Cars) Free(car);
         }
 
-        LiveRestore.ReconcileGarage(controller, condition.Cars.ToDictionary(c => c.CarGUID, c => c), outcome);
-    }
-
-    private static List<(LocoZoneBlocker Blocker, TrainCar Car)> LendBlockers(IEnumerable<TrainCar> cars)
-    {
-        var lent = cars.SelectMany(car => CarLifecycle.BlockersFor(car).Take(1).Select(b => (b, car))).ToList();
-        foreach (var (blocker, car) in lent) blocker.transform.SetParent(car.transform, worldPositionStays: true);
-        return lent;
-    }
-
-    private static void ReturnBlockers(List<(LocoZoneBlocker Blocker, TrainCar Car)> lent)
-    {
-        foreach (var (blocker, car) in lent)
-        {
-            if (blocker == null || car == null) continue;
-            blocker.transform.SetParent(car.interior, worldPositionStays: false);
-            blocker.transform.localPosition = Vector3.zero;
-            blocker.transform.localRotation = Quaternion.identity;
-        }
+        LiveRestore.ReconcileGarage(condition.Controller, condition.Cars.ToDictionary(c => c.CarGUID, c => c),
+            outcome);
     }
 
     private static void Free(TrainCar car)

@@ -5,7 +5,6 @@ using DRF.Model;
 using DRF.Saves;
 using DV.JObjectExtstensions;
 using DV.LocoRestoration;
-using HarmonyLib;
 using Newtonsoft.Json.Linq;
 
 namespace DRF.Restore;
@@ -77,11 +76,7 @@ internal static class CargoTable
         {
             if (controller == null || (int)controller.State != PartOnACar) continue;
 
-            var carrying = Traverse.Create(controller).Field("transportingCars").GetValue<List<TrainCar>>();
-            foreach (var car in carrying ?? [])
-            {
-                if (car != null) yield return (int)car.LoadedCargo;
-            }
+            foreach (var car in WorldState.TransportingCars(controller)) yield return (int)car.LoadedCargo;
         }
     }
 

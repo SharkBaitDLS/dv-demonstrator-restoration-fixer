@@ -6,25 +6,21 @@ using DRF.Saves;
 using DRF.World;
 using DV.JObjectExtstensions;
 using DV.LocoRestoration;
-using HarmonyLib;
 using Newtonsoft.Json.Linq;
 
 namespace DRF.Restore;
 
 internal static class LiveRestore
 {
-    private static readonly System.Reflection.FieldInfo? LoadingDoneField =
-        AccessTools.Field(typeof(LocoRestorationController), "loadingDone");
-
     // One controller partway through a restore that has been emptied out and is waiting for its new car(s).
     private sealed class Pending(string saveId, LocoRestorationController controller, JObject entry,
-        DemonstratorRecord wanted, object? loadingDone)
+        DemonstratorRecord wanted, QuestPopups.Held popups)
     {
         internal string SaveId { get; } = saveId;
         internal LocoRestorationController Controller { get; } = controller;
         internal JObject Entry { get; } = entry;
         internal DemonstratorRecord Wanted { get; } = wanted;
-        internal object? LoadingDone { get; } = loadingDone;
+        internal QuestPopups.Held Popups { get; } = popups;
         internal int Asked { get; set; }
 
         internal bool Ready { get; set; }
@@ -67,7 +63,7 @@ internal static class LiveRestore
         finally
         {
             // Restore the quest popups no matter what the outcome
-            foreach (var p in pending) LoadingDoneField?.SetValue(p.Controller, p.LoadingDone ?? true);
+            foreach (var p in pending) p.Popups.Dispose();
         }
 
         if (outcome.Demonstrators > 0) CommsRadio.Refresh();
@@ -114,9 +110,8 @@ internal static class LiveRestore
         }
 
         // Listed before anything is touched, so its popups are turned back on whatever happens next.
-        var p = new Pending(saveId, controller, entry, wanted, LoadingDoneField?.GetValue(controller));
+        var p = new Pending(saveId, controller, entry, wanted, QuestPopups.Hold(controller));
         pending.Add(p);
-        LoadingDoneField?.SetValue(controller, false);
 
         ControllerTeardown.Detach(controller, outcome);
         p.Asked = DropPartInTransit(entry, wanted.State, saveId, outcome);

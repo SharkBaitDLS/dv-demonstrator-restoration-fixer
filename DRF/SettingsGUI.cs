@@ -22,10 +22,10 @@ internal static class SettingsGUI
 
         Optionally, if you are using Custom Demonstrators and wish to bring a custom demonstrator forward without overridding a different one that has been restored in its slot, DRF can assign the recovered demonstrator to a new slot in the museum if one is available.
 
-        No save from before it happened? A demonstrator whose cars are still in the world can instead be moved forward through its quest by hand, as far as where its cars are allows.
+        No save from before it happened? Use tools to edit your current world state instead to fix the problem.
         """;
 
-    private static readonly string[] Modes = ["Restore from a save", "Move a quest forward by hand"];
+    private static readonly string[] Modes = ["Restore from a save", "Edit the current world state"];
 
     private const float ButtonWidth = 420f;
     private const float FieldLabelWidth = 220f;
@@ -138,7 +138,8 @@ internal static class SettingsGUI
         var reset = world.Count(d => d.Value.State == 0 && WasFurtherAlong(d.Key));
         var earlyGarages = DV.LocoRestoration.LocoRestorationController.allLocoRestorationControllers
             .Count(c => c != null && WorldState.GarageUnlockedEarly(c));
-        if (lost == 0 && reset == 0 && earlyGarages == 0) return;
+        var strandedParts = PartsOrderReset.Read().StrandedCars;
+        if (lost == 0 && reset == 0 && earlyGarages == 0 && strandedParts == 0) return;
 
         GUILayout.BeginVertical(GUI.skin.box);
         if (lost > 0)
@@ -150,8 +151,36 @@ internal static class SettingsGUI
             GUILayout.Label($"{earlyGarages} demonstrator(s) have their garage unlocked before being repaired. "
                 + $"It can be revoked under \"{Modes[1]}\".", GUILayout.ExpandWidth(true));
         }
+        if (strandedParts > 0)
+        {
+            GUILayout.Label($"{strandedParts} car(s) are carrying parts that no demonstrator is waiting for. "
+                + $"They can be emptied under \"{Modes[1]}\".", GUILayout.ExpandWidth(true));
+        }
         GUILayout.EndVertical();
         GUILayout.Space(6);
+    }
+
+    private static void DrawPartsReset()
+    {
+        var survey = PartsOrderReset.Read();
+        if (!survey.Any) return;
+
+        GUILayout.Space(6);
+        GUILayout.Label("Parts orders", Bold);
+        GUILayout.Label($"{survey.Orders} parts order(s) active, {survey.StrandedCars} car(s) carrying parts that "
+            + "no demonstrator is waiting for.");
+
+        if (GUILayout.Button("Reset all active parts orders", GUILayout.Width(ButtonWidth)))
+        {
+            _lastOutcomeHeading = "Last change, parts orders reset by hand:";
+            Main.Logger.Log("Resetting all active parts orders by hand.");
+            _lastOutcome = PartsOrderReset.Apply();
+            _currentSurvey = null;
+        }
+
+        GUILayout.Label("Empties every car hauling restoration parts back to the warehouse and puts each paid-for "
+            + "order back at the loading track, ready to be picked up again. Use this if a DM1U or flatcar is "
+            + "stuck with parts cargo that won't deliver.", GUILayout.ExpandWidth(true));
     }
 
     private static bool WasFurtherAlong(string saveId) =>
@@ -231,19 +260,21 @@ internal static class SettingsGUI
             return;
         }
 
-        if (AdvanceView.Draw() is not { } request) return;
+        var request = AdvanceView.Draw();
+        DrawPartsReset();
+        if (request is not { } advance) return;
 
-        if (request.State is not { } state)
+        if (advance.State is not { } state)
         {
-            _lastOutcomeHeading = $"Last change, {request.SaveId}'s garage revoked by hand:";
-            Main.Logger.Log($"Revoking the garage of {request.SaveId} by hand.");
-            _lastOutcome = ManualAdvance.RevokeGarage(request.SaveId);
+            _lastOutcomeHeading = $"Last change, {advance.SaveId}'s garage revoked by hand:";
+            Main.Logger.Log($"Revoking the garage of {advance.SaveId} by hand.");
+            _lastOutcome = ManualAdvance.RevokeGarage(advance.SaveId);
             return;
         }
 
-        _lastOutcomeHeading = $"Last change, {request.SaveId} moved forward by hand:";
-        Main.Logger.Log($"Moving {request.SaveId} forward to {RestorationStates.Describe(state)} by hand.");
-        _lastOutcome = ManualAdvance.Apply(request.SaveId, state);
+        _lastOutcomeHeading = $"Last change, {advance.SaveId} moved forward by hand:";
+        Main.Logger.Log($"Moving {advance.SaveId} forward to {RestorationStates.Describe(state)} by hand.");
+        _lastOutcome = ManualAdvance.Apply(advance.SaveId, state);
     }
 
     private static SaveGameData? _surveyedSave;

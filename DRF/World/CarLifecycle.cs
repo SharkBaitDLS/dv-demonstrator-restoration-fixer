@@ -62,6 +62,18 @@ internal static class CarLifecycle
             + string.Join(", ", staged.Select(d => d.ID)));
     }
 
+    internal static bool ReturnCargo(TrainCar car, WarehouseMachine? warehouse)
+    {
+        var logic = car.logicCar;
+        var unloaded = logic != null && logic.CurrentCargoTypeInCar != CargoType.None;
+        if (unloaded) logic?.UnloadCargo(logic.LoadedCargoAmount, logic.CurrentCargoTypeInCar, warehouse);
+
+        car.preventFastTravelWithCar = false;
+        car.preventDelete = false;
+
+        return unloaded;
+    }
+
     internal static int SweepGadgetsToLostAndFound(TrainCar car)
     {
         var storage = SingletonBehaviour<StorageController>.Instance;

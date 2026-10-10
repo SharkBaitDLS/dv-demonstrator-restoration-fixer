@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using DRF.Model;
 using DRF.World;
 using DV.Logic.Job;
 using DV.LocoRestoration;
@@ -59,7 +60,7 @@ internal static class ControllerTeardown
         StopWatchingLicenses(controller, loco, secondCar);
         StopWatchingPurchases(controller);
         CancelPartDelivery(controller, view);
-        ReleaseTransportingCars(controller, view, outcome);
+        ReleaseTransportingCars(controller, outcome);
 
         foreach (var car in new[] { loco, secondCar })
         {
@@ -132,26 +133,17 @@ internal static class ControllerTeardown
     // a save mid-transit of a parts order *and* makes a breaking change that would motivate them to use DRF while
     // doing so, and we can inconvenience that edge case of users slightly to avoid the risks associated with trying
     // to rebuild S6 states.
-    private static void ReleaseTransportingCars(LocoRestorationController controller, Traverse view,
-        RestoreOutcome outcome)
+    private static void ReleaseTransportingCars(LocoRestorationController controller, RestoreOutcome outcome)
     {
-        foreach (var car in view.Field("transportingCars").GetValue<List<TrainCar>>() ?? [])
+        foreach (var car in WorldState.TransportingCars(controller))
         {
-            if (car == null) continue;
-
-            car.preventFastTravelWithCar = false;
-            car.preventDelete = false;
-
-            var logic = car.logicCar;
-            if (logic == null || logic.CurrentCargoTypeInCar == CargoType.None) continue;
-
-            logic.UnloadCargo(logic.LoadedCargoAmount, logic.CurrentCargoTypeInCar, PartsWarehouse(controller));
-            outcome.Note($"{car.ID} was hauling this demonstrator's part, which no longer has a restoration "
-                + "waiting for it, so it has gone back to the warehouse.");
+            if (!CarLifecycle.ReturnCargo(car, PartsWarehouse(controller))) continue;
+            outcome.Note($"{car.ID} was hauling the part for '{controller.SaveID}', which has gone back to the "
+                + "warehouse.");
         }
     }
 
-    private static WarehouseMachine? PartsWarehouse(LocoRestorationController controller) =>
+    internal static WarehouseMachine? PartsWarehouse(LocoRestorationController controller) =>
         controller.warehouseMachineForPartPickup != null ? controller.warehouseMachineForPartPickup.warehouseMachine : null;
 
     private static void StopWatchingCar(LocoRestorationController controller, TrainCar car)

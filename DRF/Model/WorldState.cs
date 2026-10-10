@@ -30,6 +30,12 @@ internal static class WorldState
     private static readonly Lazy<AccessTools.FieldRef<LocoRestorationController, TrainCar>?> SecondCarField =
         new(() => Car("secondCar"));
 
+    private static readonly Lazy<AccessTools.FieldRef<LocoRestorationController, List<TrainCar>>?>
+        TransportingCarsField = new(() =>
+            AccessTools.Field(typeof(LocoRestorationController), "transportingCars") is { } field
+                ? AccessTools.FieldRefAccess<LocoRestorationController, List<TrainCar>>(field)
+                : null);
+
     private static AccessTools.FieldRef<LocoRestorationController, TrainCar>? Car(string name) =>
         AccessTools.Field(typeof(LocoRestorationController), name) is { } field
             ? AccessTools.FieldRefAccess<LocoRestorationController, TrainCar>(field)
@@ -42,6 +48,9 @@ internal static class WorldState
 
     internal static TrainCar? SecondCar(LocoRestorationController controller) =>
         SecondCarField.Value?.Invoke(controller);
+
+    internal static IEnumerable<TrainCar> TransportingCars(LocoRestorationController controller) =>
+        (TransportingCarsField.Value?.Invoke(controller) ?? []).Where(car => car != null);
 
     // Some mods can unlock a demonstrator's garage before its quest has earned it.
     internal static bool GarageUnlockedEarly(LocoRestorationController controller) =>

@@ -20,6 +20,8 @@ internal sealed class RestoreOutcome
 
     internal int ItemsUnaccounted { get; set; }
 
+    internal int ItemsAlreadyThere { get; set; }
+
     internal bool CustomDemonstratorsRestored { get; set; }
 
     internal bool Failed { get; set; }
@@ -51,6 +53,7 @@ internal sealed class RestoreOutcome
         if (CarsAlreadyPresent > 0) lines.Add($"{CarsAlreadyPresent} car(s) were already there.");
         if (CarsFailed > 0) lines.Add($"{CarsFailed} car(s) could not be placed.");
         if (ItemsReattached > 0) lines.Add($"Reattached {ItemsReattached} item(s) from lost and found.");
+        if (ItemsAlreadyThere > 0) lines.Add($"{ItemsAlreadyThere} item(s) were still on their car.");
         if (ItemsUnaccounted > 0) lines.Add($"{ItemsUnaccounted} item(s) had nothing in lost and found to claim.");
         if (CustomDemonstratorsRestored) lines.Add("Restored the Custom Demonstrators save record.");
         if (ByHand && Demonstrators == 0 && !Failed) lines.RemoveAt(0);

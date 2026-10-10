@@ -85,6 +85,10 @@ internal static class SaveKeys
 
     // Inside the state of a gadget item
     internal const string GadgetPlacedOn = "placedOn";
+    internal const string GadgetData = "gadgetData";
+
+    // Inside gadgetData 
+    internal const string GadgetUid = "uid";
 
     internal static IEnumerable<string> CarsKeys(JObject root) =>
         [.. root.Properties().Select(p => p.Name).Where(n => n.StartsWith(CarsPrefix))];

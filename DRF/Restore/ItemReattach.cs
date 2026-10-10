@@ -15,18 +15,14 @@ internal static class ItemReattach
     {
         if (cars.Count == 0) return;
 
+        var gadgets = MissingGadgets(source, cars, outcome);
+        var looseItems = MissingLooseItems(source, cars, outcome);
+
         var available = LostAndFound();
-        if (available.Count == 0)
-        {
-            CountUnclaimed(source, cars, outcome);
-            return;
-        }
 
         var installed = new List<ItemSaveData>();
-        foreach (var saved in StorageLists.Read(source, SaveKeys.StorageInstalledGadgets))
+        foreach (var saved in gadgets)
         {
-            var placedOn = saved.state?.GetValue(SaveKeys.GadgetPlacedOn)?.ToString();
-            if (placedOn == null || !cars.ContainsKey(placedOn)) continue;
             if (!TryClaim(available, saved.itemPrefabName, out var item)) { outcome.ItemsUnaccounted++; continue; }
 
             if (Install(item!, saved.state) is { } save) installed.Add(save);
@@ -38,14 +34,93 @@ internal static class ItemReattach
         foreach (var save in installed) save.PostLoadItemData();
         outcome.ItemsReattached += installed.Count;
 
-        foreach (var saved in StorageLists.Read(source, SaveKeys.StorageWorld))
+        foreach (var (saved, car) in looseItems)
         {
-            if (saved.carGuid == null || !cars.TryGetValue(saved.carGuid, out var car)) continue;
             if (!TryClaim(available, saved.itemPrefabName, out var item)) { outcome.ItemsUnaccounted++; continue; }
 
             if (PutInCab(item!, car, saved)) outcome.ItemsReattached++;
             else outcome.ItemsUnaccounted++;
         }
+    }
+
+    private static List<StorageItemData> MissingGadgets(SaveGameData source,
+        IReadOnlyDictionary<string, TrainCar> cars, RestoreOutcome outcome)
+    {
+        var missing = new List<StorageItemData>();
+        foreach (var saved in StorageLists.Read(source, SaveKeys.StorageInstalledGadgets))
+        {
+            var placedOn = saved.state?.GetValue(SaveKeys.GadgetPlacedOn)?.ToString();
+            if (placedOn == null || !cars.TryGetValue(placedOn, out var car)) continue;
+
+            var fitted = FittedWithUid(car, SavedUid(saved.state));
+            if (fitted == null)
+            {
+                missing.Add(saved);
+                continue;
+            }
+
+            var fittedName = PrefabName(fitted);
+            if (fittedName == saved.itemPrefabName)
+            {
+                outcome.ItemsAlreadyThere++;
+                continue;
+            }
+
+            outcome.Warn($"Left a {saved.itemPrefabName} for {car.ID} in lost and found, because the "
+                + $"{fittedName ?? "gadget"} fitted there since has taken over its wiring.");
+        }
+        return missing;
+    }
+
+    private static List<(StorageItemData Saved, TrainCar Car)> MissingLooseItems(SaveGameData source,
+        IReadOnlyDictionary<string, TrainCar> cars, RestoreOutcome outcome)
+    {
+        var aboard = LooseItemsAboard(cars);
+        var missing = new List<(StorageItemData, TrainCar)>();
+        foreach (var saved in StorageLists.Read(source, SaveKeys.StorageWorld))
+        {
+            if (saved.carGuid == null || !cars.TryGetValue(saved.carGuid, out var car)) continue;
+
+            var key = (saved.carGuid, saved.itemPrefabName);
+            if (aboard.TryGetValue(key, out var count) && count > 0)
+            {
+                aboard[key] = count - 1;
+                outcome.ItemsAlreadyThere++;
+                continue;
+            }
+            missing.Add((saved, car));
+        }
+        return missing;
+    }
+
+    private static int? SavedUid(JObject? state) =>
+        (state?[SaveKeys.GadgetData] as JObject)?[SaveKeys.GadgetUid]?.Value<int?>();
+
+    private static GadgetBase? FittedWithUid(TrainCar car, int? uid)
+    {
+        // A uid of 0 is one the game never assigned
+        if (uid is not { } id || id == 0 || car.Customization == null) return null;
+        return car.Customization.Customizers.OfType<GadgetBase>().FirstOrDefault(g => g != null && g.UID == id);
+    }
+
+    private static Dictionary<(string Guid, string Prefab), int> LooseItemsAboard(
+        IReadOnlyDictionary<string, TrainCar> cars)
+    {
+        var result = new Dictionary<(string, string), int>();
+        var controller = SingletonBehaviour<StorageController>.Instance;
+        var storage = controller != null ? controller.StorageWorld : null;
+        if (storage == null) return result;
+
+        foreach (var item in storage.GetStorageItemList().Where(i => i != null))
+        {
+            var car = TrainCar.Resolve(item.gameObject);
+            if (car == null || !cars.ContainsKey(car.CarGUID)) continue;
+            if (PrefabName(item) is not { } name) continue;
+
+            var key = (car.CarGUID, name);
+            result[key] = result.TryGetValue(key, out var count) ? count + 1 : 1;
+        }
+        return result;
     }
 
     private static ItemSaveData? Install(ItemBase item, JObject? state)
@@ -104,23 +179,22 @@ internal static class ItemReattach
         foreach (var item in storage.GetStorageItemList().Where(i => i != null))
         {
             if (IsInstalled(item)) continue;
+            if (PrefabName(item) is not { } name) continue;
 
-            var name = item.InventorySpecs != null ? item.InventorySpecs.ItemPrefabName : null;
-            if (string.IsNullOrEmpty(name)) continue;
-
-
-            if (!result.TryGetValue(name!, out var list)) result[name!] = list = [];
+            if (!result.TryGetValue(name, out var list)) result[name] = list = [];
             list.Add(item);
         }
         return result;
     }
 
-    private static void CountUnclaimed(SaveGameData source, IReadOnlyDictionary<string, TrainCar> cars,
-        RestoreOutcome outcome)
-    {
-        outcome.ItemsUnaccounted += StorageLists.Read(source, SaveKeys.StorageInstalledGadgets)
-            .Count(i => i.state?.GetValue(SaveKeys.GadgetPlacedOn)?.ToString() is { } on && cars.ContainsKey(on));
-        outcome.ItemsUnaccounted += StorageLists.Read(source, SaveKeys.StorageWorld)
-            .Count(i => i.carGuid != null && cars.ContainsKey(i.carGuid));
-    }
+    private static string? PrefabName(ItemBase item) =>
+        item.InventorySpecs != null && !string.IsNullOrEmpty(item.InventorySpecs.ItemPrefabName)
+            ? item.InventorySpecs.ItemPrefabName
+            : null;
+
+    private static string? PrefabName(GadgetBase gadget) =>
+        gadget.GadgetItem != null && gadget.GadgetItem.TryGetComponent<InventoryItemSpec>(out var spec)
+            && !string.IsNullOrEmpty(spec.ItemPrefabName)
+            ? spec.ItemPrefabName
+            : null;
 }

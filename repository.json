@@ -2,8 +2,23 @@
 	"Releases": [
 		{
 			"Id": "DRF",
+			"Version": "1.2.1",
+			"DownloadUrl": "https://github.com/SharkBaitDLS/dv-demonstrator-restoration-fixer/releases/download/1.2.1/DRF.zip"
+		},
+		{
+			"Id": "DRF",
 			"Version": "1.2.0",
 			"DownloadUrl": "https://github.com/SharkBaitDLS/dv-demonstrator-restoration-fixer/releases/download/1.2.0/DRF.zip"
+		},
+		{
+			"Id": "DRF",
+			"Version": "1.1.0",
+			"DownloadUrl": "https://github.com/SharkBaitDLS/dv-demonstrator-restoration-fixer/releases/download/1.1.0/DRF.zip"
+		},
+		{
+			"Id": "DRF",
+			"Version": "1.0.0",
+			"DownloadUrl": "https://github.com/SharkBaitDLS/dv-demonstrator-restoration-fixer/releases/download/1.0.0/DRF.zip"
 		}
 	]
 }

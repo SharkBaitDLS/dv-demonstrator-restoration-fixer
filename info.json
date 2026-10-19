@@ -1,6 +1,6 @@
 {
 	"Id": "DRF",
-	"Version": "1.2.0",
+	"Version": "1.2.1",
 	"DisplayName": "Demonstrator Restoration Fixer",
 	"Author": "SharkBaitDLS",
 	"EntryMethod": "DRF.Main.Load",

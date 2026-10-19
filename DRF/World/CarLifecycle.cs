@@ -47,7 +47,11 @@ internal static class CarLifecycle
             ? new HashSet<StagedOwnedCarDebt>(owned.currentlyDestroyedOwnedCarStates)
             : null;
 
-        SingletonBehaviour<CarSpawner>.Instance.DeleteCar(car);
+        var spawner = SingletonBehaviour<CarSpawner>.Instance;
+        var pooled = spawner.IsCarLiveryPooled(car.carLivery);
+        spawner.DeleteCar(car);
+
+        if (!pooled && car != null) car.preventCouple = true;
 
         if (owned == null || before == null) return;
 
